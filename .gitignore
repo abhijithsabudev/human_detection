@@ -12,6 +12,9 @@
 .swiftpm/
 migrate_working_dir/
 
+# Internal notes (not for git)
+instructions.md
+
 # IntelliJ related
 *.iml
 *.ipr
