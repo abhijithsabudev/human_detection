@@ -1,12 +1,5 @@
 # Files to exclude from pub.dev package
 
-# Internal notes
-instructions.md
-SETUP_COMPLETE.md
-
-# Model training (users don't need this)
-model_training/
-
 # Screenshots (hosted on GitHub, not needed in package)
 screenshots/
 
