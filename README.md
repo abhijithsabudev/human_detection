@@ -4,18 +4,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-android%20%7C%20ios-green.svg)](https://flutter.dev)
 
-A Flutter plugin for detecting humans in images using machine learning. Uses a pre-trained SSD MobileNet model with TensorFlow Lite for efficient on-device inference.
+A lightweight Flutter plugin for detecting humans in images using machine learning. Uses a pre-trained SSD MobileNet model with TensorFlow Lite for efficient on-device inference.
 
 ## Features
 
+- 🚀 **Zero Setup** - Just call `HumanDetection.detect()` - no initialization needed!
 - 🔍 **Human Detection** - Detect if an image contains a human with high accuracy
 - 📦 **Pre-trained Model** - Uses Google's SSD MobileNet V1 trained on COCO dataset
-- ⚡ **Fast Inference** - Optimized for real-time detection (~4MB model)
+- ⚡ **Non-blocking** - Runs asynchronously without blocking the UI
 - 📱 **Cross-platform** - Works on both Android and iOS
 - 🎯 **GPU Acceleration** - Optional GPU delegate for faster processing
-- 🔧 **Configurable** - Adjustable confidence threshold and thread count
 - 📊 **Detailed Results** - Get confidence scores, processing time, and bounding boxes
-- 🎁 **No Setup Required** - Model is bundled with the package
 
 ## Installation
 
@@ -56,26 +55,17 @@ platform :ios, '13.0'
 
 ## Usage
 
-### Basic Usage
+### Basic Usage - Just One Line!
 
 ```dart
 import 'package:human_detection/human_detection.dart';
 
-// Create an instance
-final humanDetection = HumanDetection();
-
-// Initialize the detector
-await humanDetection.initialize();
-
-// Detect human from file path
-final result = await humanDetection.detectHuman('/path/to/image.jpg');
+// That's it! No initialization required.
+final result = await HumanDetection.detect('/path/to/image.jpg');
 
 print('Is human: ${result.isHuman}');
 print('Confidence: ${(result.confidence * 100).toStringAsFixed(1)}%');
 print('Processing time: ${result.processingTimeMs}ms');
-
-// Don't forget to dispose when done
-await humanDetection.dispose();
 ```
 
 ### Detection from Bytes
@@ -84,19 +74,29 @@ await humanDetection.dispose();
 import 'dart:io';
 
 final bytes = await File('image.jpg').readAsBytes();
-final result = await humanDetection.detectHumanFromBytes(bytes);
+final result = await HumanDetection.detectFromBytes(bytes);
 ```
 
-### Custom Configuration
+### Custom Configuration (Optional)
 
 ```dart
-await humanDetection.initialize(
-  HumanDetectionOptions(
-    confidenceThreshold: 0.7,  // Higher threshold for stricter detection
-    useGpuDelegate: true,       // Use GPU acceleration
-    numThreads: 4,              // Number of CPU threads
-  ),
-);
+// Configure once if you need custom settings
+await HumanDetection.configure(HumanDetectionOptions(
+  confidenceThreshold: 0.7,  // Higher threshold for stricter detection
+  useGpuDelegate: true,       // Use GPU acceleration
+  numThreads: 4,              // Number of CPU threads
+));
+
+// Then detect as usual
+final result = await HumanDetection.detect('/path/to/image.jpg');
+```
+
+### Clean Up (Optional)
+
+```dart
+// Call dispose when completely done to free memory
+// The next detect call will automatically re-initialize
+await HumanDetection.dispose();
 ```
 
 ### Complete Example
@@ -105,7 +105,6 @@ await humanDetection.initialize(
 import 'package:flutter/material.dart';
 import 'package:human_detection/human_detection.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 
 class HumanDetectionExample extends StatefulWidget {
   @override
@@ -113,39 +112,24 @@ class HumanDetectionExample extends StatefulWidget {
 }
 
 class _HumanDetectionExampleState extends State<HumanDetectionExample> {
-  final _humanDetection = HumanDetection();
   HumanDetectionResult? _result;
-  bool _isInitialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeDetector();
-  }
-
-  Future<void> _initializeDetector() async {
-    try {
-      await _humanDetection.initialize();
-      setState(() => _isInitialized = true);
-    } catch (e) {
-      print('Initialization failed: $e');
-    }
-  }
+  bool _isLoading = false;
 
   Future<void> _pickAndDetect() async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
     
     if (image != null) {
-      final result = await _humanDetection.detectHuman(image.path);
-      setState(() => _result = result);
+      setState(() => _isLoading = true);
+      
+      // Just one line - no setup needed!
+      final result = await HumanDetection.detect(image.path);
+      
+      setState(() {
+        _result = result;
+        _isLoading = false;
+      });
     }
-  }
-
-  @override
-  void dispose() {
-    _humanDetection.dispose();
-    super.dispose();
   }
 
   @override
@@ -155,7 +139,9 @@ class _HumanDetectionExampleState extends State<HumanDetectionExample> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_result != null) ...[
+            if (_isLoading)
+              const CircularProgressIndicator()
+            else if (_result != null) ...[
               Icon(
                 _result!.isHuman ? Icons.person : Icons.person_off,
                 size: 64,
@@ -164,8 +150,8 @@ class _HumanDetectionExampleState extends State<HumanDetectionExample> {
               Text('Confidence: ${(_result!.confidence * 100).toStringAsFixed(1)}%'),
             ],
             ElevatedButton(
-              onPressed: _isInitialized ? _pickAndDetect : null,
-              child: Text('Select Image'),
+              onPressed: _isLoading ? null : _pickAndDetect,
+              child: const Text('Select Image'),
             ),
           ],
         ),
@@ -177,15 +163,15 @@ class _HumanDetectionExampleState extends State<HumanDetectionExample> {
 
 ## API Reference
 
-### HumanDetection
+### HumanDetection (Static Methods)
 
 | Method | Description |
 |--------|-------------|
-| `initialize([options])` | Initialize the detection model |
-| `detectHuman(imagePath)` | Detect human from file path |
-| `detectHumanFromBytes(bytes)` | Detect human from image bytes |
-| `dispose()` | Release resources |
-| `isInitialized` | Check if model is ready |
+| `detect(imagePath, {options})` | Detect human from file path (auto-initializes) |
+| `detectFromBytes(bytes, {options})` | Detect human from image bytes (auto-initializes) |
+| `configure(options)` | Pre-configure detection options |
+| `dispose()` | Release resources (optional) |
+| `isInitialized` | Check if model is loaded |
 
 ### HumanDetectionOptions
 

@@ -1,8 +1,6 @@
 import 'dart:io';
-import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:human_detection/human_detection.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -34,76 +32,12 @@ class HumanDetectionDemo extends StatefulWidget {
 }
 
 class _HumanDetectionDemoState extends State<HumanDetectionDemo> {
-  final HumanDetection _humanDetection = HumanDetection();
   final ImagePicker _imagePicker = ImagePicker();
 
-  String _platformVersion = 'Unknown';
-  bool _isInitialized = false;
   bool _isLoading = false;
   File? _selectedImage;
   HumanDetectionResult? _detectionResult;
   String? _errorMessage;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializePlugin();
-  }
-
-  @override
-  void dispose() {
-    _humanDetection.dispose();
-    super.dispose();
-  }
-
-  Future<void> _initializePlugin() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      // Get platform version
-      final platformVersion =
-          await _humanDetection.getPlatformVersion() ??
-          'Unknown platform version';
-
-      // Initialize the human detection model
-      await _humanDetection.initialize(
-        const HumanDetectionOptions(
-          confidenceThreshold: 0.5,
-          useGpuDelegate: true,
-          numThreads: 4,
-        ),
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _platformVersion = platformVersion;
-        _isInitialized = true;
-        _isLoading = false;
-      });
-    } on PlatformException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Platform error: ${e.message}';
-        _isLoading = false;
-      });
-    } on HumanDetectionException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Initialization error: ${e.message}';
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Unknown error: $e';
-        _isLoading = false;
-      });
-    }
-  }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -119,6 +53,8 @@ class _HumanDetectionDemoState extends State<HumanDetectionDemo> {
           _detectionResult = null;
           _errorMessage = null;
         });
+        // Auto-detect after picking image
+        await _detectHuman();
       }
     } catch (e) {
       setState(() {
@@ -128,7 +64,7 @@ class _HumanDetectionDemoState extends State<HumanDetectionDemo> {
   }
 
   Future<void> _detectHuman() async {
-    if (_selectedImage == null || !_isInitialized) return;
+    if (_selectedImage == null) return;
 
     setState(() {
       _isLoading = true;
@@ -137,7 +73,8 @@ class _HumanDetectionDemoState extends State<HumanDetectionDemo> {
     });
 
     try {
-      final result = await _humanDetection.detectHuman(_selectedImage!.path);
+      // Simple one-liner! No initialization required.
+      final result = await HumanDetection.detect(_selectedImage!.path);
 
       if (!mounted) return;
 
@@ -154,7 +91,7 @@ class _HumanDetectionDemoState extends State<HumanDetectionDemo> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Unknown error: $e';
+        _errorMessage = 'Error: $e';
         _isLoading = false;
       });
     }
@@ -172,41 +109,6 @@ class _HumanDetectionDemoState extends State<HumanDetectionDemo> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Platform info card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Platform: $_platformVersion',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(
-                          _isInitialized ? Icons.check_circle : Icons.pending,
-                          color: _isInitialized ? Colors.green : Colors.orange,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _isInitialized
-                              ? 'Model Ready'
-                              : 'Model Not Initialized',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
             // Image selection buttons
             Row(
               children: [
@@ -248,26 +150,17 @@ class _HumanDetectionDemoState extends State<HumanDetectionDemo> {
               const SizedBox(height: 16),
             ],
 
-            // Detect button
-            if (_selectedImage != null)
-              ElevatedButton.icon(
-                onPressed: (_isLoading || !_isInitialized)
-                    ? null
-                    : _detectHuman,
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.search),
-                label: Text(_isLoading ? 'Detecting...' : 'Detect Human'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+            // Loading indicator
+            if (_isLoading)
+              const Center(
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 8),
+                    Text('Detecting...'),
+                  ],
                 ),
               ),
-
-            const SizedBox(height: 16),
 
             // Error message
             if (_errorMessage != null)
@@ -292,6 +185,31 @@ class _HumanDetectionDemoState extends State<HumanDetectionDemo> {
 
             // Detection result
             if (_detectionResult != null) _buildResultCard(_detectionResult!),
+
+            const SizedBox(height: 24),
+
+            // Info card
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'How it works',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This demo uses the human_detection package which '
+                      'automatically loads a pre-trained ML model to detect '
+                      'humans in images. Just select an image and the detection '
+                      'happens automatically!',
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -350,18 +268,21 @@ class _HumanDetectionDemoState extends State<HumanDetectionDemo> {
               valueColor: AlwaysStoppedAnimation<Color>(
                 isHuman ? Colors.green : Colors.orange,
               ),
-              minHeight: 8,
-              borderRadius: BorderRadius.circular(4),
             ),
-            const SizedBox(height: 16),
-            // Processing time
-            if (processingTime != null)
+            if (processingTime != null) ...[
+              const SizedBox(height: 8),
               Text(
                 'Processing time: ${processingTime}ms',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
+            ],
+            if (result.boundingBox != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Bounding box: ${result.boundingBox}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),

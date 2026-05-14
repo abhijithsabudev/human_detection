@@ -21,9 +21,6 @@ class MockHumanDetectionPlatform
 
   @override
   Future<HumanDetectionResult> detectHuman(String imagePath) async {
-    if (!initialized) {
-      throw const HumanDetectionException('Not initialized');
-    }
     return const HumanDetectionResult(
       isHuman: true,
       confidence: 0.95,
@@ -35,9 +32,6 @@ class MockHumanDetectionPlatform
   Future<HumanDetectionResult> detectHumanFromBytes(
     Uint8List imageBytes,
   ) async {
-    if (!initialized) {
-      throw const HumanDetectionException('Not initialized');
-    }
     return const HumanDetectionResult(
       isHuman: false,
       confidence: 0.2,
@@ -59,64 +53,63 @@ void main() {
     expect(initialPlatform, isInstanceOf<MethodChannelHumanDetection>());
   });
 
-  test('getPlatformVersion', () async {
-    HumanDetection humanDetectionPlugin = HumanDetection();
-    MockHumanDetectionPlatform fakePlatform = MockHumanDetectionPlatform();
-    HumanDetectionPlatform.instance = fakePlatform;
-
-    expect(await humanDetectionPlugin.getPlatformVersion(), '42');
-  });
-
-  group('HumanDetection', () {
-    late HumanDetection humanDetection;
+  group('HumanDetection static API', () {
     late MockHumanDetectionPlatform mockPlatform;
 
-    setUp(() {
+    setUp(() async {
       mockPlatform = MockHumanDetectionPlatform();
       HumanDetectionPlatform.instance = mockPlatform;
-      humanDetection = HumanDetection();
+      // Reset state before each test
+      await HumanDetection.dispose();
     });
 
-    test('isInitialized returns false before initialization', () {
-      expect(humanDetection.isInitialized, false);
+    tearDown(() async {
+      await HumanDetection.dispose();
     });
 
-    test('initialize sets isInitialized to true', () async {
-      await humanDetection.initialize();
-      expect(humanDetection.isInitialized, true);
-    });
+    test('detect auto-initializes and returns result', () async {
+      expect(HumanDetection.isInitialized, false);
+      
+      final result = await HumanDetection.detect('/path/to/image.jpg');
 
-    test('detectHuman throws StateError when not initialized', () {
-      expect(
-        () => humanDetection.detectHuman('/path/to/image.jpg'),
-        throwsStateError,
-      );
-    });
-
-    test('detectHuman returns result after initialization', () async {
-      await humanDetection.initialize();
-      final result = await humanDetection.detectHuman('/path/to/image.jpg');
-
+      expect(HumanDetection.isInitialized, true);
       expect(result.isHuman, true);
       expect(result.confidence, 0.95);
       expect(result.processingTimeMs, 50);
     });
 
-    test('detectHumanFromBytes returns result after initialization', () async {
-      await humanDetection.initialize();
-      final result = await humanDetection.detectHumanFromBytes(Uint8List(100));
+    test('detectFromBytes auto-initializes and returns result', () async {
+      expect(HumanDetection.isInitialized, false);
+      
+      final result = await HumanDetection.detectFromBytes(Uint8List(100));
 
+      expect(HumanDetection.isInitialized, true);
       expect(result.isHuman, false);
       expect(result.confidence, 0.2);
       expect(result.processingTimeMs, 45);
     });
 
-    test('dispose sets isInitialized to false', () async {
-      await humanDetection.initialize();
-      expect(humanDetection.isInitialized, true);
+    test('dispose resets initialization state', () async {
+      await HumanDetection.detect('/path/to/image.jpg');
+      expect(HumanDetection.isInitialized, true);
 
-      await humanDetection.dispose();
-      expect(humanDetection.isInitialized, false);
+      await HumanDetection.dispose();
+      expect(HumanDetection.isInitialized, false);
+    });
+
+    test('getPlatformVersion returns platform version', () async {
+      final version = await HumanDetection.getPlatformVersion();
+      expect(version, '42');
+    });
+
+    test('configure initializes with custom options', () async {
+      await HumanDetection.configure(const HumanDetectionOptions(
+        confidenceThreshold: 0.8,
+        useGpuDelegate: false,
+      ));
+      
+      expect(HumanDetection.isInitialized, true);
+      expect(mockPlatform.initialized, true);
     });
   });
 
