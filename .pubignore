@@ -1,0 +1,21 @@
+# Files to exclude from pub.dev package
+
+# Internal notes
+instructions.md
+SETUP_COMPLETE.md
+
+# Model training (users don't need this)
+model_training/
+
+# Build outputs
+build/
+*.pyc
+__pycache__/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
