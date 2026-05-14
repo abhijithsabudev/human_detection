@@ -1,6 +1,6 @@
 name: human_detection
 description: "A Flutter plugin for detecting humans in images using machine learning. Uses TensorFlow Lite for efficient on-device inference."
-version: 1.0.0
+version: 1.0.1
 homepage: https://github.com/abhijithsabudev/human_detection
 repository: https://github.com/abhijithsabudev/human_detection
 issue_tracker: https://github.com/abhijithsabudev/human_detection/issues

@@ -16,6 +16,13 @@ A lightweight Flutter plugin for detecting humans in images using machine learni
 - 🎯 **GPU Acceleration** - Optional GPU delegate for faster processing
 - 📊 **Detailed Results** - Get confidence scores, processing time, and bounding boxes
 
+## Screenshots
+
+| Human Detected | No Human Detected |
+|:--------------:|:-----------------:|
+| ![Human Detected](https://raw.githubusercontent.com/abhijithsabudev/human_detection/main/screenshots/human_detected.png) | ![No Human Detected](https://raw.githubusercontent.com/abhijithsabudev/human_detection/main/screenshots/no_human_detected.png) |
+| Confidence: 68.8% | Confidence: 27.0% |
+
 ## Installation
 
 Add this to your package's `pubspec.yaml` file:

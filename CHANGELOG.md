@@ -1,3 +1,14 @@
+## 1.0.1
+
+### Bug Fixes & Improvements
+
+* **iOS Fix**: Fixed image preprocessing pixel format issue (BGRA to RGB conversion)
+* iOS detection now works correctly with the same accuracy as Android
+* Added screenshots to README demonstrating detection results
+* Improved documentation with visual examples
+
+---
+
 ## 1.0.0
 
 ### Initial Release 🎉

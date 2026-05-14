@@ -301,18 +301,29 @@ public class HumanDetectionPlugin: NSObject, FlutterPlugin {
     private func preprocessImage(_ image: UIImage) -> Data? {
         let targetSize = CGSize(width: inputWidth, height: inputHeight)
         
-        UIGraphicsBeginImageContextWithOptions(targetSize, true, 1.0)
-        defer { UIGraphicsEndImageContext() }
+        // Create a bitmap context with explicit RGB color space
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * inputWidth
+        let bitsPerComponent = 8
         
-        image.draw(in: CGRect(origin: .zero, size: targetSize))
+        var pixelBuffer = [UInt8](repeating: 0, count: inputWidth * inputHeight * bytesPerPixel)
         
-        guard let resizedImage = UIGraphicsGetImageFromCurrentImageContext(),
-              let pixelData = resizedImage.cgImage?.dataProvider?.data else {
+        guard let context = CGContext(
+            data: &pixelBuffer,
+            width: inputWidth,
+            height: inputHeight,
+            bitsPerComponent: bitsPerComponent,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue  // RGBX format
+        ) else {
             return nil
         }
         
-        let data: UnsafePointer<UInt8> = CFDataGetBytePtr(pixelData)
-        let bytesPerPixel = 4
+        // Draw the image into the context (this handles all format conversions)
+        guard let cgImage = image.cgImage else { return nil }
+        context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
         
         // Check if model expects quantized (uint8) or float input
         let inputTensor = try? interpreter?.input(at: 0)
@@ -330,9 +341,10 @@ public class HumanDetectionPlugin: NSObject, FlutterPlugin {
                     for x in 0..<inputWidth {
                         let offset = (y * inputWidth + x) * bytesPerPixel
                         
-                        byteBuffer[pixelIndex] = data[offset]     // R
-                        byteBuffer[pixelIndex + 1] = data[offset + 1] // G
-                        byteBuffer[pixelIndex + 2] = data[offset + 2] // B
+                        // Now data is in RGB format (due to CGContext configuration)
+                        byteBuffer[pixelIndex] = pixelBuffer[offset]         // R
+                        byteBuffer[pixelIndex + 1] = pixelBuffer[offset + 1] // G
+                        byteBuffer[pixelIndex + 2] = pixelBuffer[offset + 2] // B
                         
                         pixelIndex += 3
                     }
@@ -352,9 +364,10 @@ public class HumanDetectionPlugin: NSObject, FlutterPlugin {
                     for x in 0..<inputWidth {
                         let offset = (y * inputWidth + x) * bytesPerPixel
                         
-                        floatBuffer[pixelIndex] = Float(data[offset]) / 255.0
-                        floatBuffer[pixelIndex + 1] = Float(data[offset + 1]) / 255.0
-                        floatBuffer[pixelIndex + 2] = Float(data[offset + 2]) / 255.0
+                        // Now data is in RGB format (due to CGContext configuration)
+                        floatBuffer[pixelIndex] = Float(pixelBuffer[offset]) / 255.0
+                        floatBuffer[pixelIndex + 1] = Float(pixelBuffer[offset + 1]) / 255.0
+                        floatBuffer[pixelIndex + 2] = Float(pixelBuffer[offset + 2]) / 255.0
                         
                         pixelIndex += 3
                     }
