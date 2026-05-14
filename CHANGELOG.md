@@ -2,15 +2,18 @@
 
 ### Initial Release 🎉
 
+**Features:**
 * Human detection from image file path
 * Human detection from image bytes
 * Configurable confidence threshold
 * GPU acceleration support (Android & iOS)
 * Configurable thread count for CPU inference
 * Custom model support
-* Detailed detection results with confidence scores and processing time
+* Detailed detection results with:
+  - Confidence scores
+  - Processing time
+  - Bounding box coordinates
 * Comprehensive example application
-* Python training scripts for custom model training
 
 ### Supported Platforms
 
@@ -19,6 +22,9 @@
 
 ### Model
 
-* MobileNetV2-based binary classifier
+* **Pre-trained SSD MobileNet V1** from TensorFlow Hub
+* Trained on COCO dataset (detects "person" class)
 * Optimized for mobile deployment with TensorFlow Lite
-* Float16 quantization for reduced size
+* Model size: ~4 MB
+* Input: 300x300 RGB images
+* Supports both object detection and binary classifier models
