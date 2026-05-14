@@ -8,10 +8,13 @@ public class HumanDetectionPlugin: NSObject, FlutterPlugin {
     private var confidenceThreshold: Float = 0.5
     private var numThreads: Int = 4
     
-    private let inputSize = 224
+    // Default input size, will be updated based on model
+    private var inputWidth = 300
+    private var inputHeight = 300
     private let pixelSize = 3
-    private let imageMean: Float = 127.5
-    private let imageStd: Float = 127.5
+    
+    // Person class ID in COCO dataset
+    private let personClassId = 0
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "human_detection", binaryMessenger: registrar.messenger())
@@ -54,6 +57,15 @@ public class HumanDetectionPlugin: NSObject, FlutterPlugin {
                 }
             } else {
                 try loadModelFromBundle()
+            }
+            
+            // Get input tensor shape
+            if let inputTensor = try? interpreter?.input(at: 0) {
+                let shape = inputTensor.shape.dimensions
+                if shape.count >= 3 {
+                    inputHeight = shape[1]
+                    inputWidth = shape[2]
+                }
             }
             
             result(nil)
@@ -187,36 +199,107 @@ public class HumanDetectionPlugin: NSObject, FlutterPlugin {
         try interpreter?.copy(inputData, toInputAt: 0)
         try interpreter?.invoke()
         
-        // Get output
-        let outputTensor = try interpreter?.output(at: 0)
-        let outputData = outputTensor?.data
+        // Check number of outputs to determine model type
+        let outputCount = interpreter?.outputTensorCount ?? 1
         
-        guard let data = outputData else {
+        let processingTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+        
+        if outputCount >= 4 {
+            // Object detection model (SSD MobileNet format)
+            return try runObjectDetectionInference(processingTime: processingTime)
+        } else {
+            // Binary classifier
+            return try runBinaryClassifierInference(processingTime: processingTime)
+        }
+    }
+    
+    private func runObjectDetectionInference(processingTime: Double) throws -> [String: Any] {
+        // Object detection outputs:
+        // 0: Bounding boxes [1, N, 4]
+        // 1: Class IDs [1, N]
+        // 2: Scores [1, N]
+        // 3: Number of detections [1]
+        
+        guard let boxesTensor = try interpreter?.output(at: 0),
+              let classesTensor = try interpreter?.output(at: 1),
+              let scoresTensor = try interpreter?.output(at: 2),
+              let numDetectionsTensor = try interpreter?.output(at: 3) else {
             throw NSError(
                 domain: "HumanDetection",
                 code: 3,
-                userInfo: [NSLocalizedDescriptionKey: "Failed to get output data"]
+                userInfo: [NSLocalizedDescriptionKey: "Failed to get output tensors"]
             )
         }
         
-        let confidence = data.withUnsafeBytes { (pointer: UnsafeRawBufferPointer) -> Float in
-            pointer.load(as: Float.self)
+        let numDetections = numDetectionsTensor.data.withUnsafeBytes { ptr -> Int in
+            Int(ptr.load(as: Float.self))
         }
         
-        let processingTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+        var maxPersonConfidence: Float = 0
+        var bestBoundingBox: [String: Double]? = nil
+        
+        let maxDetections = min(numDetections, 10)
+        
+        for i in 0..<maxDetections {
+            let classId = classesTensor.data.withUnsafeBytes { ptr -> Int in
+                Int(ptr.load(fromByteOffset: i * MemoryLayout<Float>.size, as: Float.self))
+            }
+            
+            let score = scoresTensor.data.withUnsafeBytes { ptr -> Float in
+                ptr.load(fromByteOffset: i * MemoryLayout<Float>.size, as: Float.self)
+            }
+            
+            // Check if it's a person (class 0) with sufficient confidence
+            if classId == personClassId && score > maxPersonConfidence {
+                maxPersonConfidence = score
+                
+                let boxOffset = i * 4 * MemoryLayout<Float>.size
+                bestBoundingBox = boxesTensor.data.withUnsafeBytes { ptr -> [String: Double] in
+                    [
+                        "top": Double(ptr.load(fromByteOffset: boxOffset, as: Float.self)),
+                        "left": Double(ptr.load(fromByteOffset: boxOffset + MemoryLayout<Float>.size, as: Float.self)),
+                        "bottom": Double(ptr.load(fromByteOffset: boxOffset + 2 * MemoryLayout<Float>.size, as: Float.self)),
+                        "right": Double(ptr.load(fromByteOffset: boxOffset + 3 * MemoryLayout<Float>.size, as: Float.self))
+                    ]
+                }
+            }
+        }
+        
+        let isHuman = maxPersonConfidence >= confidenceThreshold
+        
+        return [
+            "isHuman": isHuman,
+            "confidence": Double(maxPersonConfidence),
+            "processingTimeMs": Int(processingTime),
+            "boundingBox": bestBoundingBox as Any
+        ]
+    }
+    
+    private func runBinaryClassifierInference(processingTime: Double) throws -> [String: Any] {
+        guard let outputTensor = try interpreter?.output(at: 0) else {
+            throw NSError(
+                domain: "HumanDetection",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to get output tensor"]
+            )
+        }
+        
+        let confidence = outputTensor.data.withUnsafeBytes { ptr -> Float in
+            ptr.load(as: Float.self)
+        }
+        
         let isHuman = confidence >= confidenceThreshold
         
         return [
             "isHuman": isHuman,
             "confidence": Double(confidence),
-            "processingTimeMs": Int(processingTime)
+            "processingTimeMs": Int(processingTime),
+            "boundingBox": NSNull()
         ]
     }
     
     private func preprocessImage(_ image: UIImage) -> Data? {
-        guard let cgImage = image.cgImage else { return nil }
-        
-        let targetSize = CGSize(width: inputSize, height: inputSize)
+        let targetSize = CGSize(width: inputWidth, height: inputHeight)
         
         UIGraphicsBeginImageContextWithOptions(targetSize, true, 1.0)
         defer { UIGraphicsEndImageContext() }
@@ -231,31 +314,55 @@ public class HumanDetectionPlugin: NSObject, FlutterPlugin {
         let data: UnsafePointer<UInt8> = CFDataGetBytePtr(pixelData)
         let bytesPerPixel = 4
         
-        var inputData = Data(count: inputSize * inputSize * pixelSize * MemoryLayout<Float>.size)
+        // Check if model expects quantized (uint8) or float input
+        let inputTensor = try? interpreter?.input(at: 0)
+        let isQuantized = inputTensor?.dataType == .uInt8
         
-        inputData.withUnsafeMutableBytes { rawBuffer in
-            guard let floatBuffer = rawBuffer.bindMemory(to: Float.self).baseAddress else { return }
+        if isQuantized {
+            // Quantized model expects uint8 values (0-255)
+            var inputData = Data(count: inputWidth * inputHeight * pixelSize)
             
-            var pixelIndex = 0
-            for y in 0..<inputSize {
-                for x in 0..<inputSize {
-                    let offset = (y * inputSize + x) * bytesPerPixel
-                    
-                    let r = Float(data[offset]) 
-                    let g = Float(data[offset + 1])
-                    let b = Float(data[offset + 2])
-                    
-                    // Normalize to [-1, 1] for MobileNetV2
-                    floatBuffer[pixelIndex] = (r - imageMean) / imageStd
-                    floatBuffer[pixelIndex + 1] = (g - imageMean) / imageStd
-                    floatBuffer[pixelIndex + 2] = (b - imageMean) / imageStd
-                    
-                    pixelIndex += 3
+            inputData.withUnsafeMutableBytes { rawBuffer in
+                guard let byteBuffer = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return }
+                
+                var pixelIndex = 0
+                for y in 0..<inputHeight {
+                    for x in 0..<inputWidth {
+                        let offset = (y * inputWidth + x) * bytesPerPixel
+                        
+                        byteBuffer[pixelIndex] = data[offset]     // R
+                        byteBuffer[pixelIndex + 1] = data[offset + 1] // G
+                        byteBuffer[pixelIndex + 2] = data[offset + 2] // B
+                        
+                        pixelIndex += 3
+                    }
                 }
             }
+            
+            return inputData
+        } else {
+            // Float model expects normalized values (0-1)
+            var inputData = Data(count: inputWidth * inputHeight * pixelSize * MemoryLayout<Float>.size)
+            
+            inputData.withUnsafeMutableBytes { rawBuffer in
+                guard let floatBuffer = rawBuffer.bindMemory(to: Float.self).baseAddress else { return }
+                
+                var pixelIndex = 0
+                for y in 0..<inputHeight {
+                    for x in 0..<inputWidth {
+                        let offset = (y * inputWidth + x) * bytesPerPixel
+                        
+                        floatBuffer[pixelIndex] = Float(data[offset]) / 255.0
+                        floatBuffer[pixelIndex + 1] = Float(data[offset + 1]) / 255.0
+                        floatBuffer[pixelIndex + 2] = Float(data[offset + 2]) / 255.0
+                        
+                        pixelIndex += 3
+                    }
+                }
+            }
+            
+            return inputData
         }
-        
-        return inputData
     }
     
     private func handleDispose(result: @escaping FlutterResult) {
