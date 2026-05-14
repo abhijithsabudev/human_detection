@@ -69,7 +69,7 @@ void main() {
 
     test('detect auto-initializes and returns result', () async {
       expect(HumanDetection.isInitialized, false);
-      
+
       final result = await HumanDetection.detect('/path/to/image.jpg');
 
       expect(HumanDetection.isInitialized, true);
@@ -80,7 +80,7 @@ void main() {
 
     test('detectFromBytes auto-initializes and returns result', () async {
       expect(HumanDetection.isInitialized, false);
-      
+
       final result = await HumanDetection.detectFromBytes(Uint8List(100));
 
       expect(HumanDetection.isInitialized, true);
@@ -103,11 +103,13 @@ void main() {
     });
 
     test('configure initializes with custom options', () async {
-      await HumanDetection.configure(const HumanDetectionOptions(
-        confidenceThreshold: 0.8,
-        useGpuDelegate: false,
-      ));
-      
+      await HumanDetection.configure(
+        const HumanDetectionOptions(
+          confidenceThreshold: 0.8,
+          useGpuDelegate: false,
+        ),
+      );
+
       expect(HumanDetection.isInitialized, true);
       expect(mockPlatform.initialized, true);
     });
@@ -159,7 +161,7 @@ void main() {
       const options = HumanDetectionOptions();
 
       expect(options.confidenceThreshold, 0.5);
-      expect(options.useGpuDelegate, true);
+      expect(options.useGpuDelegate, false);
       expect(options.numThreads, 4);
       expect(options.modelPath, null);
     });
@@ -169,7 +171,7 @@ void main() {
       final updated = options.copyWith(confidenceThreshold: 0.7);
 
       expect(updated.confidenceThreshold, 0.7);
-      expect(updated.useGpuDelegate, true); // unchanged
+      expect(updated.useGpuDelegate, false); // unchanged
     });
 
     test('toMap serializes all properties', () {

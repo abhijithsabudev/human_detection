@@ -9,7 +9,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.Delegate
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -26,10 +26,10 @@ class HumanDetectionPlugin :
     private lateinit var context: Context
     
     private var interpreter: Interpreter? = null
-    private var gpuDelegate: GpuDelegate? = null
+    private var gpuDelegate: Delegate? = null
     
     private var confidenceThreshold: Float = 0.5f
-    private var useGpuDelegate: Boolean = true
+    private var useGpuDelegate: Boolean = false  // Disabled by default for compatibility
     private var numThreads: Int = 4
     private var isObjectDetectionModel: Boolean = true
     
@@ -94,14 +94,16 @@ class HumanDetectionPlugin :
                 setNumThreads(numThreads)
             }
             
-            // Try to use GPU delegate
+            // Try to use GPU delegate if requested (using reflection for optional dependency)
             if (useGpuDelegate) {
                 try {
-                    gpuDelegate = GpuDelegate()
+                    val gpuDelegateClass = Class.forName("org.tensorflow.lite.gpu.GpuDelegate")
+                    gpuDelegate = gpuDelegateClass.getDeclaredConstructor().newInstance() as Delegate
                     interpreterOptions.addDelegate(gpuDelegate)
                 } catch (e: Exception) {
                     // GPU delegate not available, fall back to CPU
                     gpuDelegate = null
+                    android.util.Log.w("HumanDetection", "GPU delegate not available, using CPU: ${e.message}")
                 }
             }
             

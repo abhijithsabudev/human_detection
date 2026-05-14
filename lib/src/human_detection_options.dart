@@ -5,7 +5,7 @@ class HumanDetectionOptions {
   /// Creates new [HumanDetectionOptions].
   const HumanDetectionOptions({
     this.confidenceThreshold = 0.5,
-    this.useGpuDelegate = true,
+    this.useGpuDelegate = false,
     this.numThreads = 4,
     this.modelPath,
   });
@@ -21,8 +21,9 @@ class HumanDetectionOptions {
 
   /// Whether to use GPU acceleration when available.
   ///
-  /// GPU acceleration can significantly improve performance on supported devices.
-  /// Default is `true`.
+  /// GPU acceleration can improve performance on supported devices,
+  /// but may not be available on all devices.
+  /// Default is `false` for maximum compatibility.
   final bool useGpuDelegate;
 
   /// Number of threads to use for inference.

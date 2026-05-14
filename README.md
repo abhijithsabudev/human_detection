@@ -83,7 +83,7 @@ final result = await HumanDetection.detectFromBytes(bytes);
 // Configure once if you need custom settings
 await HumanDetection.configure(HumanDetectionOptions(
   confidenceThreshold: 0.7,  // Higher threshold for stricter detection
-  useGpuDelegate: true,       // Use GPU acceleration
+  useGpuDelegate: true,       // Enable GPU acceleration (disabled by default)
   numThreads: 4,              // Number of CPU threads
 ));
 
@@ -178,7 +178,7 @@ class _HumanDetectionExampleState extends State<HumanDetectionExample> {
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `confidenceThreshold` | `double` | `0.5` | Minimum confidence to consider detection positive |
-| `useGpuDelegate` | `bool` | `true` | Use GPU acceleration if available |
+| `useGpuDelegate` | `bool` | `false` | Use GPU acceleration if available |
 | `numThreads` | `int` | `4` | Number of CPU threads for inference |
 | `modelPath` | `String?` | `null` | Custom model path (uses bundled model if null) |
 

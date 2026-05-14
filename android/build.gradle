@@ -48,10 +48,12 @@ android {
     }
 
     dependencies {
-        // TensorFlow Lite
-        implementation("org.tensorflow:tensorflow-lite:2.14.0")
-        implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+        // TensorFlow Lite - using compatible versions
+        implementation("org.tensorflow:tensorflow-lite:2.13.0")
         implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+        
+        // GPU delegate is optional - wrapped in try-catch at runtime
+        compileOnly("org.tensorflow:tensorflow-lite-gpu:2.13.0")
         
         // Testing
         testImplementation("org.jetbrains.kotlin:kotlin-test")

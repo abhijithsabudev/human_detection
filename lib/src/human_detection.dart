@@ -108,7 +108,9 @@ class HumanDetection {
   }
 
   // Internal: Ensures model is initialized before detection
-  static Future<void> _ensureInitialized([HumanDetectionOptions? options]) async {
+  static Future<void> _ensureInitialized([
+    HumanDetectionOptions? options,
+  ]) async {
     if (_initialized) return;
 
     // Handle concurrent initialization calls
